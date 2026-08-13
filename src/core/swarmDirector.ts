@@ -1,20 +1,24 @@
 import { Skill } from '../types';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { DynamicTool, DynamicStructuredTool } from '@langchain/core/tools';
-import { SystemMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
+import { DynamicTool } from '@langchain/core/tools';
+import { HumanMessage } from '@langchain/core/messages';
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { MemorySaver } from '@langchain/langgraph';
 import { McpClientManager } from './mcpClient';
+import { getOsTools } from './tools/osTools';
 import ora from 'ora';
 import pc from 'picocolors';
-import { z } from 'zod';
 
 export class SwarmDirector {
   private skills: Skill[];
   private llm: ChatGoogleGenerativeAI;
   private mcpManager: McpClientManager;
+  private checkpointer: MemorySaver;
 
   constructor(skills: Skill[], mcpManager: McpClientManager) {
     this.skills = skills;
     this.mcpManager = mcpManager;
+    this.checkpointer = new MemorySaver(); // In-memory persistent state for the swarm
     this.llm = new ChatGoogleGenerativeAI({
       model: 'gemini-1.5-pro',
       temperature: 0,
@@ -23,14 +27,19 @@ export class SwarmDirector {
   }
 
   private buildTools(): any[] {
-    return this.skills.map(skill => {
-      // Create a more precise tool for MCP tools
+    const aiTools: any[] = [];
+    
+    // 1. Tambahkan Built-in OS Tools (Bash, File Reader/Writer)
+    aiTools.push(...getOsTools());
+
+    // 2. Tambahkan Eksternal Skills (Antigravity & MCP)
+    for (const skill of this.skills) {
       if (skill.source === 'mcp_server' && skill.mcpServerName) {
-        return new DynamicTool({
+        aiTools.push(new DynamicTool({
           name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64),
           description: skill.description || `Tool dari MCP ${skill.mcpServerName}`,
           func: async (input: string) => {
-            console.log(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`);
+            console.log(pc.magenta(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`));
             try {
               let parsedInput = {};
               try { parsedInput = JSON.parse(input); } catch (e) { parsedInput = { input }; }
@@ -40,18 +49,20 @@ export class SwarmDirector {
               return `Gagal mengeksekusi MCP Tool: ${err.message}`;
             }
           },
-        });
+        }));
+      } else {
+        aiTools.push(new DynamicTool({
+          name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
+          description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
+          func: async (input: string) => {
+            console.log(pc.blue(`\n[Agent -> Antigravity] Menjalankan skill lokal: ${skill.name}`));
+            return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
+          },
+        }));
       }
+    }
 
-      // Default for Antigravity skills
-      return new DynamicTool({
-        name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
-        description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
-        func: async (input: string) => {
-          return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
-        },
-      });
-    });
+    return aiTools;
   }
 
   public async executeTask(taskDescription: string): Promise<void> {
@@ -61,65 +72,47 @@ export class SwarmDirector {
     }
 
     const tools = this.buildTools();
-    const llmWithTools = tools.length > 0 ? this.llm.bindTools(tools) : this.llm;
     
-    const messages: any[] = [
-      new SystemMessage('Anda adalah "macli", seorang Swarm Director tingkat lanjut. Pecah tugas pengguna dan gunakan alat (tools) yang tersedia, termasuk tools dari Claude MCP Server, untuk menyelesaikannya. Berikan jawaban komprehensif dalam bahasa Indonesia.'),
-      new HumanMessage(taskDescription)
-    ];
+    // Konfigurasi agen LangGraph (State Graph Multi-Agent System)
+    const agent = createReactAgent({
+      llm: this.llm,
+      tools,
+      checkpointSaver: this.checkpointer,
+      messageModifier: 'Anda adalah "macli", sebuah Enterprise Swarm Agent. Anda memiliki akses ke eksekutor bash native, file system, tool lokal, dan Claude MCP server. Jalankan tugas secara mandiri. Jangan ragu memanggil tool. Analisa error dan perbaiki.'
+    });
 
-    let isDone = false;
-    let step = 1;
+    console.log(pc.cyan('\n[SwarmDirector] LangGraph Network Aktif. Memulai eksekusi task...'));
+    
+    const config = { configurable: { thread_id: "macli-session-1" } };
+    const spinner = ora(`Swarm AI sedang menganalisa dan bekerja...`).start();
 
-    console.log(pc.cyan('\n[SwarmDirector] Memulai ReAct Loop dengan Dukungan MCP...'));
+    try {
+      const stream = await agent.stream({
+        messages: [new HumanMessage(taskDescription)],
+      }, config);
 
-    while (!isDone && step < 10) {
-      const spinner = ora(`[Step ${step}] Swarm AI sedang berpikir...`).start();
-      
-      try {
-        const response = await llmWithTools.invoke(messages);
-        messages.push(response);
-        spinner.stop();
-
-        if (response.tool_calls && response.tool_calls.length > 0) {
-          console.log(pc.magenta(`\n🔧 [Agent Memanggil Tool]`));
-          
-          for (const toolCall of response.tool_calls) {
-            console.log(`   ${pc.bold('Tool:')} ${toolCall.name}`);
-            console.log(`   ${pc.bold('Input:')} ${JSON.stringify(toolCall.args)}`);
-            
-            const spinnerTool = ora(`Mengeksekusi ${toolCall.name}...`).start();
-            
-            const matchedTool = tools.find(t => t.name === toolCall.name);
-            let toolResultStr = "Tool tidak ditemukan";
-            
-            if (matchedTool) {
-               const inputArg = typeof toolCall.args === 'string' ? toolCall.args : JSON.stringify(toolCall.args);
-               toolResultStr = await matchedTool.invoke(inputArg);
-            }
-
-            spinnerTool.succeed(`Selesai mengeksekusi ${toolCall.name}`);
-            console.log(pc.dim(`   > ${toolResultStr.substring(0, 300)}${toolResultStr.length > 300 ? '...' : ''}\n`));
-            
-            messages.push(new ToolMessage({
-              tool_call_id: toolCall.id!,
-              name: toolCall.name,
-              content: toolResultStr
-            }));
-          }
-          step++;
-        } else {
-          isDone = true;
-          console.log(pc.green(pc.bold('\n✨ [SwarmDirector] Tugas Selesai!')));
-          console.log(pc.white('============================================='));
-          console.log(response.content);
-          console.log(pc.white('=============================================\n'));
+      for await (const chunk of stream) {
+        if ("agent" in chunk) {
+            spinner.text = 'Swarm Agent (LLM) sedang berpikir...';
+        } else if ("tools" in chunk) {
+            spinner.text = 'Swarm Agent sedang menggunakan Tool...';
         }
-      } catch (error: any) {
-        spinner.fail(pc.red(`Gagal pada langkah ${step}`));
-        console.error(pc.red(error.message));
-        break;
       }
+
+      spinner.succeed(pc.green(pc.bold('\n✨ [SwarmDirector] Task selesai dieksekusi!')));
+      
+      // Ambil hasil akhir dari state graph
+      const finalState = await agent.getState(config);
+      const messages = finalState.values.messages;
+      const lastMessage = messages[messages.length - 1];
+      
+      console.log(pc.white('============================================='));
+      console.log(lastMessage.content);
+      console.log(pc.white('=============================================\n'));
+
+    } catch (error: any) {
+      spinner.fail(pc.red(`Gagal mengeksekusi LangGraph Swarm.`));
+      console.error(pc.red(error.message));
     }
   }
 }

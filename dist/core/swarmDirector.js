@@ -7,15 +7,20 @@ exports.SwarmDirector = void 0;
 const google_genai_1 = require("@langchain/google-genai");
 const tools_1 = require("@langchain/core/tools");
 const messages_1 = require("@langchain/core/messages");
+const prebuilt_1 = require("@langchain/langgraph/prebuilt");
+const langgraph_1 = require("@langchain/langgraph");
+const osTools_1 = require("./tools/osTools");
 const ora_1 = __importDefault(require("ora"));
 const picocolors_1 = __importDefault(require("picocolors"));
 class SwarmDirector {
     skills;
     llm;
     mcpManager;
+    checkpointer;
     constructor(skills, mcpManager) {
         this.skills = skills;
         this.mcpManager = mcpManager;
+        this.checkpointer = new langgraph_1.MemorySaver(); // In-memory persistent state for the swarm
         this.llm = new google_genai_1.ChatGoogleGenerativeAI({
             model: 'gemini-1.5-pro',
             temperature: 0,
@@ -23,14 +28,17 @@ class SwarmDirector {
         });
     }
     buildTools() {
-        return this.skills.map(skill => {
-            // Create a more precise tool for MCP tools
+        const aiTools = [];
+        // 1. Tambahkan Built-in OS Tools (Bash, File Reader/Writer)
+        aiTools.push(...(0, osTools_1.getOsTools)());
+        // 2. Tambahkan Eksternal Skills (Antigravity & MCP)
+        for (const skill of this.skills) {
             if (skill.source === 'mcp_server' && skill.mcpServerName) {
-                return new tools_1.DynamicTool({
+                aiTools.push(new tools_1.DynamicTool({
                     name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64),
                     description: skill.description || `Tool dari MCP ${skill.mcpServerName}`,
                     func: async (input) => {
-                        console.log(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`);
+                        console.log(picocolors_1.default.magenta(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`));
                         try {
                             let parsedInput = {};
                             try {
@@ -46,17 +54,20 @@ class SwarmDirector {
                             return `Gagal mengeksekusi MCP Tool: ${err.message}`;
                         }
                     },
-                });
+                }));
             }
-            // Default for Antigravity skills
-            return new tools_1.DynamicTool({
-                name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
-                description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
-                func: async (input) => {
-                    return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
-                },
-            });
-        });
+            else {
+                aiTools.push(new tools_1.DynamicTool({
+                    name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
+                    description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
+                    func: async (input) => {
+                        console.log(picocolors_1.default.blue(`\n[Agent -> Antigravity] Menjalankan skill lokal: ${skill.name}`));
+                        return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
+                    },
+                }));
+            }
+        }
+        return aiTools;
     }
     async executeTask(taskDescription) {
         if (!process.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY === 'dummy_key') {
@@ -64,55 +75,40 @@ class SwarmDirector {
             return;
         }
         const tools = this.buildTools();
-        const llmWithTools = tools.length > 0 ? this.llm.bindTools(tools) : this.llm;
-        const messages = [
-            new messages_1.SystemMessage('Anda adalah "macli", seorang Swarm Director tingkat lanjut. Pecah tugas pengguna dan gunakan alat (tools) yang tersedia, termasuk tools dari Claude MCP Server, untuk menyelesaikannya. Berikan jawaban komprehensif dalam bahasa Indonesia.'),
-            new messages_1.HumanMessage(taskDescription)
-        ];
-        let isDone = false;
-        let step = 1;
-        console.log(picocolors_1.default.cyan('\n[SwarmDirector] Memulai ReAct Loop dengan Dukungan MCP...'));
-        while (!isDone && step < 10) {
-            const spinner = (0, ora_1.default)(`[Step ${step}] Swarm AI sedang berpikir...`).start();
-            try {
-                const response = await llmWithTools.invoke(messages);
-                messages.push(response);
-                spinner.stop();
-                if (response.tool_calls && response.tool_calls.length > 0) {
-                    console.log(picocolors_1.default.magenta(`\n🔧 [Agent Memanggil Tool]`));
-                    for (const toolCall of response.tool_calls) {
-                        console.log(`   ${picocolors_1.default.bold('Tool:')} ${toolCall.name}`);
-                        console.log(`   ${picocolors_1.default.bold('Input:')} ${JSON.stringify(toolCall.args)}`);
-                        const spinnerTool = (0, ora_1.default)(`Mengeksekusi ${toolCall.name}...`).start();
-                        const matchedTool = tools.find(t => t.name === toolCall.name);
-                        let toolResultStr = "Tool tidak ditemukan";
-                        if (matchedTool) {
-                            const inputArg = typeof toolCall.args === 'string' ? toolCall.args : JSON.stringify(toolCall.args);
-                            toolResultStr = await matchedTool.invoke(inputArg);
-                        }
-                        spinnerTool.succeed(`Selesai mengeksekusi ${toolCall.name}`);
-                        console.log(picocolors_1.default.dim(`   > ${toolResultStr.substring(0, 300)}${toolResultStr.length > 300 ? '...' : ''}\n`));
-                        messages.push(new messages_1.ToolMessage({
-                            tool_call_id: toolCall.id,
-                            name: toolCall.name,
-                            content: toolResultStr
-                        }));
-                    }
-                    step++;
+        // Konfigurasi agen LangGraph (State Graph Multi-Agent System)
+        const agent = (0, prebuilt_1.createReactAgent)({
+            llm: this.llm,
+            tools,
+            checkpointSaver: this.checkpointer,
+            messageModifier: 'Anda adalah "macli", sebuah Enterprise Swarm Agent. Anda memiliki akses ke eksekutor bash native, file system, tool lokal, dan Claude MCP server. Jalankan tugas secara mandiri. Jangan ragu memanggil tool. Analisa error dan perbaiki.'
+        });
+        console.log(picocolors_1.default.cyan('\n[SwarmDirector] LangGraph Network Aktif. Memulai eksekusi task...'));
+        const config = { configurable: { thread_id: "macli-session-1" } };
+        const spinner = (0, ora_1.default)(`Swarm AI sedang menganalisa dan bekerja...`).start();
+        try {
+            const stream = await agent.stream({
+                messages: [new messages_1.HumanMessage(taskDescription)],
+            }, config);
+            for await (const chunk of stream) {
+                if ("agent" in chunk) {
+                    spinner.text = 'Swarm Agent (LLM) sedang berpikir...';
                 }
-                else {
-                    isDone = true;
-                    console.log(picocolors_1.default.green(picocolors_1.default.bold('\n✨ [SwarmDirector] Tugas Selesai!')));
-                    console.log(picocolors_1.default.white('============================================='));
-                    console.log(response.content);
-                    console.log(picocolors_1.default.white('=============================================\n'));
+                else if ("tools" in chunk) {
+                    spinner.text = 'Swarm Agent sedang menggunakan Tool...';
                 }
             }
-            catch (error) {
-                spinner.fail(picocolors_1.default.red(`Gagal pada langkah ${step}`));
-                console.error(picocolors_1.default.red(error.message));
-                break;
-            }
+            spinner.succeed(picocolors_1.default.green(picocolors_1.default.bold('\n✨ [SwarmDirector] Task selesai dieksekusi!')));
+            // Ambil hasil akhir dari state graph
+            const finalState = await agent.getState(config);
+            const messages = finalState.values.messages;
+            const lastMessage = messages[messages.length - 1];
+            console.log(picocolors_1.default.white('============================================='));
+            console.log(lastMessage.content);
+            console.log(picocolors_1.default.white('=============================================\n'));
+        }
+        catch (error) {
+            spinner.fail(picocolors_1.default.red(`Gagal mengeksekusi LangGraph Swarm.`));
+            console.error(picocolors_1.default.red(error.message));
         }
     }
 }
