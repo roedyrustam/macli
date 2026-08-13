@@ -1,62 +1,86 @@
-<div align="center">
-  <img src="file:///C:/Users/roedy/.gemini/antigravity-ide/brain/cc633113-4ff9-479c-a160-840f9510ad17/macli_logo_1786643321629.jpg" alt="Macli Logo" width="150" style="border-radius: 20px" />
-  <h1>Macli: AI Agent Swarm Orchestrator</h1>
-  <p><em>Turn your local skills into an autonomous intelligence swarm.</em></p>
-</div>
+# 🚀 Macli - Enterprise AI Agent Swarm Orchestrator
+
+[![NPM Version](https://img.shields.io/npm/v/macli.svg)](https://www.npmjs.com/package/macli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Macli** adalah kerangka kerja (*framework*) berbasis CLI untuk mengorkestrasi ekosistem **Multi-Agent Swarm** yang sangat *powerful*. Dibangun dengan teknologi **LangGraph**, **Gemini 1.5 Pro**, dan mendukung **Claude Model Context Protocol (MCP)** secara *native*.
+
+Dengan Macli, komputer Anda bertransformasi menjadi agen *AI Software Engineer* tingkat lanjut yang setara dengan Devin, OpenHands, atau OpenClaw.
 
 ---
 
-## 🚀 Apa itu Macli?
-**Macli** adalah alat bantu *Command Line Interface* (CLI) tangguh yang dirancang untuk menjadi "konduktor" (Swarm Director) bagi berbagai agen AI. Alat ini secara dinamis membaca dan mengubah skill-skill lokal Anda (baik format Antigravity `SKILL.md` maupun tool JSON Claude/MCP) menjadi kumpulan senjata yang bisa digunakan agen AI secara mandiri untuk menyelesaikan tugas.
+## ✨ Fitur Utama
 
-## 🌟 Fitur Utama
-- **Zero-Config Skill Loader:** Cukup arahkan `macli` ke folder yang berisi `SKILL.md` Anda. Ia akan membacanya secara otomatis.
-- **Swarm Intelligence:** Didukung oleh **Gemini 1.5 Pro** dan **LangChain**, `macli` dapat memecah tugas Anda dan memilih skill yang tepat untuk dieksekusi.
-- **Extensible:** Mendukung integrasi dengan tool Claude (berbasis JSON) maupun standar Antigravity.
-- **Native TypeScript:** Aman, cepat, dan mudah dikembangkan lebih lanjut.
+- 🧠 **LangGraph ReAct Memory**: Bukan sekadar chatbot biasa. Macli mengingat state (*memory*) antar eksekusi dan mengeksekusi multi-step reasoning secara rekursif hingga tugas selesai.
+- 💻 **Built-in OS Tools (Native)**: Agen memiliki akses *built-in* ke terminal (`bash_executor`), membaca file (`file_reader`), dan memanipulasi kode sumber (`file_writer`). Ia bisa langsung coding dan mengeksekusi script di mesin Anda!
+- 🔌 **Claude MCP Integration**: Secara otomatis mendeteksi dan memuat konfigurasi *Claude Desktop* (`claude_desktop_config.json`), memungkinkan Gemini menggunakan *tools* ekosistem Claude (seperti SQLite, GitHub, AWS, dll).
+- 🛠️ **Antigravity Skills**: Kembangkan keahlian agen Anda tanpa batas dengan meletakkan instruksi di dalam file `SKILL.md`. AI akan secara otomatis membedah niat (*intent*) dan parameter (*schema*) secara cerdas berkat implementasi `DynamicStructuredTool`.
+- 🎩 **Setup Wizard Interaktif**: Inisialisasi mudah hanya dengan satu perintah.
+
+---
 
 ## 📦 Instalasi
 
-Karena ini adalah rilis awal (berbasis repositori GitHub), Anda bisa melakukan instalasi global secara lokal:
+Anda bisa menginstal `macli` secara global melalui Git:
 
 ```bash
 git clone https://github.com/roedyrustam/macli.git
 cd macli
 npm install
-npm run build
 npm link
 ```
-*Catatan: Segera tersedia di registri NPM global!*
+*(Catatan: folder `node_modules` telah dibersihkan dari repositori ini agar instalasi berjalan mulus).*
 
-## ⚙️ Konfigurasi
-Anda membutuhkan API Key dari Google Gemini untuk menghidupkan *Swarm Director*.
+---
 
-1. Buat file `.env` di folder root proyek (atau tempat Anda mengeksekusi).
-2. Tambahkan baris berikut:
-   ```env
-   GOOGLE_API_KEY=your_gemini_api_key_here
-   ```
+## ⚙️ Inisialisasi (Wajib!)
 
-## 🛠️ Cara Penggunaan
-
-Gunakan perintah `run` dan berikan tugas (prompt) Anda:
+Sebelum menggunakan agen, jalankan konfigurasi otomatis:
 
 ```bash
-macli run "Cari tahu stack teknologi aplikasi ini dan buatkan laporannya"
+macli init
 ```
+Sistem akan meminta **Google Gemini API Key** Anda dengan aman dan menyimpan konfigurasinya ke dalam file `.env`.
 
-Anda juga bisa menentukan di mana `macli` harus mencari skill-nya (default: direktori saat ini):
+---
+
+## 🎯 Cara Penggunaan
+
+Gunakan perintah `run` dan berikan tugas (prompt) apa pun kepada *Swarm* Anda:
+
 ```bash
-macli run "Optimalkan performa web" --dir ./my-custom-skills
+macli run "Cari tahu masalah di file index.ts, lalu perbaiki bug-nya!"
 ```
 
-## 🏗️ Arsitektur
-Dibuat dengan:
-- **Node.js** & **TypeScript**
-- **Commander.js** (Antarmuka CLI)
-- **@langchain/core & google-genai** (Swarm Logic & Tool Binding)
+Atau berikan agen kemampuan kustom dari direktori lain:
+```bash
+macli run "Deploy aplikasi ini ke Vercel" --dir ./my-custom-skills
+```
 
-Baca lebih detail di [BLUEPRINT.md](./BLUEPRINT.md).
+### Opsi CLI Lengkap
+- `-d, --dir <path>`: Tentukan folder tempat `SKILL.md` (Antigravity Skills) disimpan.
+- `-c, --claude-config <path>`: Jika file `claude_desktop_config.json` Anda berada di tempat yang tidak standar, definisikan di sini.
+
+---
+
+## 🏗️ Arsitektur Inti
+
+Dibuat untuk stabilitas tingkat enterprise:
+- **Node.js & TypeScript** (Strict Mode)
+- **@langchain/langgraph** (State Graph Orchestration)
+- **@langchain/google-genai** (LLM Engine)
+- **@modelcontextprotocol/sdk** (Claude MCP Standard Transport)
+- **Zod** (Strict Parameter Extraction)
+
+Penjelasan teknis mendalam dapat dibaca di [BLUEPRINT.md](./BLUEPRINT.md).
+
+---
+
+## ⚠️ Peringatan Keamanan
+
+Karena `macli` dilengkapi dengan `bash_executor` dan `file_writer` *native*, agen **bisa mengubah atau menghapus file sistem Anda**. Harap berhati-hati saat memberikan prompt destruktif (misalnya *"hapus semua file"*).
+
+---
 
 ## 📄 Lisensi
-MIT License.
+[MIT License](./LICENSE) - Dikembangkan oleh Roedy Rustam.
