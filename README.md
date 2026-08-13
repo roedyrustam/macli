@@ -20,7 +20,7 @@
 Karena ini adalah rilis awal (berbasis repositori GitHub), Anda bisa melakukan instalasi global secara lokal:
 
 ```bash
-git clone https://github.com/username/macli.git
+git clone https://github.com/roedyrustam/macli.git
 cd macli
 npm install
 npm run build
