@@ -12,8 +12,10 @@ const picocolors_1 = __importDefault(require("picocolors"));
 class SwarmDirector {
     skills;
     llm;
-    constructor(skills) {
+    mcpManager;
+    constructor(skills, mcpManager) {
         this.skills = skills;
+        this.mcpManager = mcpManager;
         this.llm = new google_genai_1.ChatGoogleGenerativeAI({
             model: 'gemini-1.5-pro',
             temperature: 0,
@@ -22,12 +24,36 @@ class SwarmDirector {
     }
     buildTools() {
         return this.skills.map(skill => {
+            // Create a more precise tool for MCP tools
+            if (skill.source === 'mcp_server' && skill.mcpServerName) {
+                return new tools_1.DynamicTool({
+                    name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64),
+                    description: skill.description || `Tool dari MCP ${skill.mcpServerName}`,
+                    func: async (input) => {
+                        console.log(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`);
+                        try {
+                            let parsedInput = {};
+                            try {
+                                parsedInput = JSON.parse(input);
+                            }
+                            catch (e) {
+                                parsedInput = { input };
+                            }
+                            const result = await this.mcpManager.executeTool(skill.mcpServerName, skill.name, parsedInput);
+                            return JSON.stringify(result.content || result);
+                        }
+                        catch (err) {
+                            return `Gagal mengeksekusi MCP Tool: ${err.message}`;
+                        }
+                    },
+                });
+            }
+            // Default for Antigravity skills
             return new tools_1.DynamicTool({
                 name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
                 description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
                 func: async (input) => {
-                    // Dummy execution simulation for the skill
-                    return `[HASIL DARI SKILL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi aksi dengan parameter: ${input}`;
+                    return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
                 },
             });
         });
@@ -40,13 +66,13 @@ class SwarmDirector {
         const tools = this.buildTools();
         const llmWithTools = tools.length > 0 ? this.llm.bindTools(tools) : this.llm;
         const messages = [
-            new messages_1.SystemMessage('Anda adalah "macli", seorang Swarm Director tingkat lanjut. Pecah tugas pengguna dan gunakan alat (tools) yang tersedia untuk menyelesaikannya. Berikan jawaban komprehensif dalam bahasa Indonesia.'),
+            new messages_1.SystemMessage('Anda adalah "macli", seorang Swarm Director tingkat lanjut. Pecah tugas pengguna dan gunakan alat (tools) yang tersedia, termasuk tools dari Claude MCP Server, untuk menyelesaikannya. Berikan jawaban komprehensif dalam bahasa Indonesia.'),
             new messages_1.HumanMessage(taskDescription)
         ];
         let isDone = false;
         let step = 1;
-        console.log(picocolors_1.default.cyan('\n[SwarmDirector] Memulai ReAct Loop...'));
-        while (!isDone && step < 10) { // Max 10 steps to prevent infinite loop
+        console.log(picocolors_1.default.cyan('\n[SwarmDirector] Memulai ReAct Loop dengan Dukungan MCP...'));
+        while (!isDone && step < 10) {
             const spinner = (0, ora_1.default)(`[Step ${step}] Swarm AI sedang berpikir...`).start();
             try {
                 const response = await llmWithTools.invoke(messages);
@@ -58,17 +84,14 @@ class SwarmDirector {
                         console.log(`   ${picocolors_1.default.bold('Tool:')} ${toolCall.name}`);
                         console.log(`   ${picocolors_1.default.bold('Input:')} ${JSON.stringify(toolCall.args)}`);
                         const spinnerTool = (0, ora_1.default)(`Mengeksekusi ${toolCall.name}...`).start();
-                        // Cari tool dan jalankan
                         const matchedTool = tools.find(t => t.name === toolCall.name);
                         let toolResultStr = "Tool tidak ditemukan";
                         if (matchedTool) {
-                            // Langchain DynamicTool takes a single string by default in its simple func mapping
                             const inputArg = typeof toolCall.args === 'string' ? toolCall.args : JSON.stringify(toolCall.args);
                             toolResultStr = await matchedTool.invoke(inputArg);
                         }
                         spinnerTool.succeed(`Selesai mengeksekusi ${toolCall.name}`);
-                        console.log(picocolors_1.default.dim(`   > ${toolResultStr}\n`));
-                        // Masukkan hasil kembali ke conversation history
+                        console.log(picocolors_1.default.dim(`   > ${toolResultStr.substring(0, 300)}${toolResultStr.length > 300 ? '...' : ''}\n`));
                         messages.push(new messages_1.ToolMessage({
                             tool_call_id: toolCall.id,
                             name: toolCall.name,

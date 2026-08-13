@@ -39,6 +39,7 @@
     "@langchain/core": "^1.2.7",
     "@langchain/google-genai": "^2.2.0",
     "@langchain/langgraph": "^1.4.9",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^17.4.2",
     "langchain": "^1.5.8",
     "ora": "^5.4.1",
