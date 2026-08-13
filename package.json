@@ -11,7 +11,15 @@
     "dev": "tsx src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["ai", "agent", "swarm", "langchain", "gemini", "claude", "cli"],
+  "keywords": [
+    "ai",
+    "agent",
+    "swarm",
+    "langchain",
+    "gemini",
+    "claude",
+    "cli"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/username/macli.git"
@@ -32,6 +40,8 @@
     "@langchain/google-genai": "^2.2.0",
     "@langchain/langgraph": "^1.4.9",
     "dotenv": "^17.4.2",
-    "langchain": "^1.5.8"
+    "langchain": "^1.5.8",
+    "ora": "^5.4.1",
+    "picocolors": "^1.1.1"
   }
 }
