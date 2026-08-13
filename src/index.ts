@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { resolve, join } from 'path';
 import { writeFile } from 'fs/promises';
-import { loadSkills, loadClaudeMcpConfig } from './core/skillLoader';
+import { loadSkills, loadClaudeMcpConfig, loadGlobalSkills } from './core/skillLoader';
 import { SwarmDirector } from './core/swarmDirector';
 import { McpClientManager } from './core/mcpClient';
 import { Skill } from './types';
@@ -53,16 +53,30 @@ program
   .argument('<task>', 'The task to execute')
   .option('-d, --dir <path>', 'Directory containing Antigravity SKILL.md files', process.cwd())
   .option('-c, --claude-config <path>', 'Path to claude_desktop_config.json')
+  .option('--no-global', 'Disable loading global Antigravity skills from ~/.gemini/config')
   .action(async (task, options) => {
     console.log(pc.cyan(pc.bold('\n🚀 Starting macli Swarm...')));
     console.log(`${pc.blue('📋 Task:')} ${task}\n`);
     
-    const spinner = ora('Memuat skills dari direktori lokal...').start();
+    const spinner = ora('Memuat skills...').start();
     const mcpManager = new McpClientManager();
     
     try {
-      const skillsDir = resolve(options.dir);
-      const skills: Skill[] = await loadSkills(skillsDir);
+      const skills: Skill[] = [];
+
+      // Load local skills
+      try {
+        const skillsDir = resolve(options.dir);
+        const localSkills = await loadSkills(skillsDir);
+        skills.push(...localSkills);
+      } catch (err) {}
+
+      // Load global skills (unless disabled)
+      if (options.global !== false) {
+        spinner.text = 'Memuat Global Antigravity Skills (termasuk vibes-plug)...';
+        const globalSkills = await loadGlobalSkills();
+        skills.push(...globalSkills);
+      }
       
       // Load Claude MCP
       let claudeConfigPath = options.claudeConfig;

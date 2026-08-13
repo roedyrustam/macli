@@ -50,14 +50,27 @@ program
     .argument('<task>', 'The task to execute')
     .option('-d, --dir <path>', 'Directory containing Antigravity SKILL.md files', process.cwd())
     .option('-c, --claude-config <path>', 'Path to claude_desktop_config.json')
+    .option('--no-global', 'Disable loading global Antigravity skills from ~/.gemini/config')
     .action(async (task, options) => {
     console.log(picocolors_1.default.cyan(picocolors_1.default.bold('\n🚀 Starting macli Swarm...')));
     console.log(`${picocolors_1.default.blue('📋 Task:')} ${task}\n`);
-    const spinner = (0, ora_1.default)('Memuat skills dari direktori lokal...').start();
+    const spinner = (0, ora_1.default)('Memuat skills...').start();
     const mcpManager = new mcpClient_1.McpClientManager();
     try {
-        const skillsDir = (0, path_1.resolve)(options.dir);
-        const skills = await (0, skillLoader_1.loadSkills)(skillsDir);
+        const skills = [];
+        // Load local skills
+        try {
+            const skillsDir = (0, path_1.resolve)(options.dir);
+            const localSkills = await (0, skillLoader_1.loadSkills)(skillsDir);
+            skills.push(...localSkills);
+        }
+        catch (err) { }
+        // Load global skills (unless disabled)
+        if (options.global !== false) {
+            spinner.text = 'Memuat Global Antigravity Skills (termasuk vibes-plug)...';
+            const globalSkills = await (0, skillLoader_1.loadGlobalSkills)();
+            skills.push(...globalSkills);
+        }
         // Load Claude MCP
         let claudeConfigPath = options.claudeConfig;
         if (!claudeConfigPath) {

@@ -38,6 +38,36 @@ export async function loadSkills(dirPath: string): Promise<Skill[]> {
   return skills;
 }
 
+import * as os from 'os';
+
+export async function loadGlobalSkills(): Promise<Skill[]> {
+  const globalSkills: Skill[] = [];
+  const homedir = os.homedir();
+  const configRoot = join(homedir, '.gemini', 'config');
+
+  // Load from root skills folder
+  const rootSkillsDir = join(configRoot, 'skills');
+  const rootSkills = await loadSkills(rootSkillsDir);
+  globalSkills.push(...rootSkills);
+
+  // Load from plugins folders
+  const pluginsDir = join(configRoot, 'plugins');
+  try {
+    const plugins = await readdir(pluginsDir);
+    for (const plugin of plugins) {
+      const pluginSkillsDir = join(pluginsDir, plugin, 'skills');
+      const pluginSkills = await loadSkills(pluginSkillsDir);
+      globalSkills.push(...pluginSkills);
+    }
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') {
+      console.error(`Error reading plugins dir: ${err.message}`);
+    }
+  }
+
+  return globalSkills;
+}
+
 export async function loadClaudeMcpConfig(configPath: string): Promise<Record<string, McpServerConfig> | null> {
   try {
     const content = await readFile(configPath, 'utf-8');
