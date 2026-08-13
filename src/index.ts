@@ -54,9 +54,14 @@ program
   .option('-d, --dir <path>', 'Directory containing Antigravity SKILL.md files', process.cwd())
   .option('-c, --claude-config <path>', 'Path to claude_desktop_config.json')
   .option('--no-global', 'Disable loading global Antigravity skills from ~/.gemini/config')
+  .option('--debug', 'Aktifkan log debug verbose')
   .action(async (task, options) => {
     console.log(pc.cyan(pc.bold('\n🚀 Starting macli Swarm...')));
     console.log(`${pc.blue('📋 Task:')} ${task}\n`);
+    
+    if (options.debug) {
+      console.log(pc.yellow('[DEBUG] Mode verbose aktif.'));
+    }
     
     const spinner = ora('Memuat skills...').start();
     const mcpManager = new McpClientManager();
@@ -114,7 +119,7 @@ program
       }
       
       const director = new SwarmDirector(skills, mcpManager);
-      await director.executeTask(task);
+      await director.executeTask(task, options.debug);
       
       await mcpManager.disconnectAll();
       

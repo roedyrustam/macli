@@ -82,7 +82,7 @@ class SwarmDirector {
         }
         return aiTools;
     }
-    async executeTask(taskDescription) {
+    async executeTask(taskDescription, debug = false) {
         if (!process.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY === 'dummy_key') {
             console.log(picocolors_1.default.yellow('\n⚠️  WARNING: GOOGLE_API_KEY belum diatur di .env! LLM tidak bisa dipanggil, simulasi dihentikan.'));
             return;
@@ -102,8 +102,12 @@ class SwarmDirector {
         }) : null;
         // Helper untuk menjalankan sub-agent dan mengembalikan state
         const runAgent = async (agent, name, state) => {
+            if (debug)
+                console.log(picocolors_1.default.yellow(`[DEBUG] Executing ${name} with ${state.messages.length} messages`));
             const result = await agent.invoke(state);
             const lastMessage = result.messages[result.messages.length - 1];
+            if (debug)
+                console.log(picocolors_1.default.yellow(`[DEBUG] ${name} Output: ${lastMessage.content}`));
             return {
                 messages: [new messages_1.HumanMessage({ content: `${name} selesai dengan output: ${lastMessage.content}`, name })]
             };
@@ -123,6 +127,8 @@ Berdasarkan pesan sebelumnya, pilih pekerja selanjutnya atau FINISH jika tugas k
         const supervisorNode = async (state) => {
             const messages = [new messages_1.SystemMessage(supervisorPrompt), ...state.messages];
             const result = await supervisorChain.invoke(messages);
+            if (debug)
+                console.log(picocolors_1.default.yellow(`[DEBUG] Supervisor Decision: -> ${result.next}`));
             return { next: result.next };
         };
         // 4. Rakit Graph

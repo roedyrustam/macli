@@ -76,7 +76,7 @@ export class SwarmDirector {
     return aiTools;
   }
 
-  public async executeTask(taskDescription: string): Promise<void> {
+  public async executeTask(taskDescription: string, debug: boolean = false): Promise<void> {
     if (!process.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY === 'dummy_key') {
       console.log(pc.yellow('\n⚠️  WARNING: GOOGLE_API_KEY belum diatur di .env! LLM tidak bisa dipanggil, simulasi dihentikan.'));
       return;
@@ -99,8 +99,10 @@ export class SwarmDirector {
 
     // Helper untuk menjalankan sub-agent dan mengembalikan state
     const runAgent = async (agent: any, name: string, state: typeof AgentState.State) => {
+      if (debug) console.log(pc.yellow(`[DEBUG] Executing ${name} with ${state.messages.length} messages`));
       const result = await agent.invoke(state);
       const lastMessage = result.messages[result.messages.length - 1];
+      if (debug) console.log(pc.yellow(`[DEBUG] ${name} Output: ${lastMessage.content}`));
       return {
         messages: [new HumanMessage({ content: `${name} selesai dengan output: ${lastMessage.content}`, name })]
       };
@@ -124,6 +126,7 @@ Berdasarkan pesan sebelumnya, pilih pekerja selanjutnya atau FINISH jika tugas k
     const supervisorNode = async (state: typeof AgentState.State) => {
       const messages = [new SystemMessage(supervisorPrompt), ...state.messages];
       const result = await supervisorChain.invoke(messages);
+      if (debug) console.log(pc.yellow(`[DEBUG] Supervisor Decision: -> ${result.next}`));
       return { next: result.next };
     };
 

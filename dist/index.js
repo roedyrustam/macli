@@ -51,9 +51,13 @@ program
     .option('-d, --dir <path>', 'Directory containing Antigravity SKILL.md files', process.cwd())
     .option('-c, --claude-config <path>', 'Path to claude_desktop_config.json')
     .option('--no-global', 'Disable loading global Antigravity skills from ~/.gemini/config')
+    .option('--debug', 'Aktifkan log debug verbose')
     .action(async (task, options) => {
     console.log(picocolors_1.default.cyan(picocolors_1.default.bold('\n🚀 Starting macli Swarm...')));
     console.log(`${picocolors_1.default.blue('📋 Task:')} ${task}\n`);
+    if (options.debug) {
+        console.log(picocolors_1.default.yellow('[DEBUG] Mode verbose aktif.'));
+    }
     const spinner = (0, ora_1.default)('Memuat skills...').start();
     const mcpManager = new mcpClient_1.McpClientManager();
     try {
@@ -104,7 +108,7 @@ program
             spinner.succeed(picocolors_1.default.green(`Berhasil memuat ${skills.length} skill eksternal ke dalam Swarm Arsenal.`));
         }
         const director = new swarmDirector_1.SwarmDirector(skills, mcpManager);
-        await director.executeTask(task);
+        await director.executeTask(task, options.debug);
         await mcpManager.disconnectAll();
     }
     catch (error) {
