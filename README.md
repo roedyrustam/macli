@@ -21,15 +21,12 @@ Dengan Macli, komputer Anda bertransformasi menjadi agen *AI Software Engineer* 
 
 ## 📦 Instalasi
 
-Anda bisa menginstal `macli` secara global melalui Git:
+Anda bisa menginstal `macli` secara global menggunakan NPM:
 
 ```bash
-git clone https://github.com/roedyrustam/macli.git
-cd macli
-npm install
-npm link
+npm install -g @roedyrustam/macli
 ```
-*(Catatan: folder `node_modules` telah dibersihkan dari repositori ini agar instalasi berjalan mulus).*
+*(Catatan: pastikan Anda menggunakan versi Node.js >= 18).*
 
 ---
 
