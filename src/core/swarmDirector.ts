@@ -1,14 +1,26 @@
 import { Skill } from '../types';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { DynamicTool, DynamicStructuredTool } from '@langchain/core/tools';
-import { HumanMessage } from '@langchain/core/messages';
+import { DynamicStructuredTool, DynamicTool } from '@langchain/core/tools';
+import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { MemorySaver } from '@langchain/langgraph';
+import { MemorySaver, StateGraph, END, START, Annotation } from '@langchain/langgraph';
 import { z } from 'zod';
 import { McpClientManager } from './mcpClient';
 import { getOsTools } from './tools/osTools';
 import ora from 'ora';
 import pc from 'picocolors';
+
+// 1. Definisikan State untuk Graph Multi-Agent
+const AgentState = Annotation.Root({
+  messages: Annotation<BaseMessage[]>({
+    reducer: (x, y) => x.concat(y),
+    default: () => [],
+  }),
+  next: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => "Supervisor",
+  })
+});
 
 export class SwarmDirector {
   private skills: Skill[];
@@ -19,7 +31,7 @@ export class SwarmDirector {
   constructor(skills: Skill[], mcpManager: McpClientManager) {
     this.skills = skills;
     this.mcpManager = mcpManager;
-    this.checkpointer = new MemorySaver(); // In-memory persistent state for the swarm
+    this.checkpointer = new MemorySaver();
     this.llm = new ChatGoogleGenerativeAI({
       model: 'gemini-1.5-pro',
       temperature: 0,
@@ -27,20 +39,15 @@ export class SwarmDirector {
     });
   }
 
-  private buildTools(): any[] {
+  private buildResearcherTools(): any[] {
     const aiTools: any[] = [];
-    
-    // 1. Tambahkan Built-in OS Tools (Bash, File Reader/Writer)
-    aiTools.push(...getOsTools());
-
-    // 2. Tambahkan Eksternal Skills (Antigravity & MCP)
     for (const skill of this.skills) {
       if (skill.source === 'mcp_server' && skill.mcpServerName) {
         aiTools.push(new DynamicTool({
           name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64),
           description: skill.description || `Tool dari MCP ${skill.mcpServerName}`,
           func: async (input: string) => {
-            console.log(pc.magenta(`\n[Agent -> MCP Claude] Menjalankan: ${skill.name}`));
+            console.log(pc.magenta(`\n[Researcher -> MCP Claude] Menjalankan: ${skill.name}`));
             try {
               let parsedInput = {};
               try { parsedInput = JSON.parse(input); } catch (e) { parsedInput = { input }; }
@@ -54,19 +61,18 @@ export class SwarmDirector {
       } else {
         aiTools.push(new DynamicStructuredTool({
           name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
-          description: skill.description || `Gunakan skill ini untuk: ${skill.name}. Panduan lengkap skill ini bisa diakses jika diperlukan.`,
+          description: skill.description || `Gunakan skill ini untuk: ${skill.name}.`,
           schema: z.object({
-            intent: z.string().describe("Niat atau tujuan spesifik pemanggilan skill ini"),
-            parameters: z.record(z.string(), z.any()).optional().describe("Parameter terstruktur tambahan (JSON-like) jika diperlukan oleh skill"),
+            intent: z.string().describe("Niat atau tujuan pemanggilan"),
+            parameters: z.record(z.string(), z.any()).optional(),
           }),
           func: async ({ intent, parameters }) => {
-            console.log(pc.blue(`\n[Agent -> Antigravity] Menjalankan skill lokal: ${skill.name}`));
-            return `[HASIL SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi intent "${intent}" dengan parameter: ${JSON.stringify(parameters || {})}`;
+            console.log(pc.blue(`\n[Researcher -> Antigravity] Menjalankan skill: ${skill.name}`));
+            return `[HASIL LOKAL]: Eksekusi intent "${intent}" parameter: ${JSON.stringify(parameters || {})}`;
           },
         }));
       }
     }
-
     return aiTools;
   }
 
@@ -76,43 +82,103 @@ export class SwarmDirector {
       return;
     }
 
-    const tools = this.buildTools();
-    
-    // Konfigurasi agen LangGraph (State Graph Multi-Agent System)
-    const agent = createReactAgent({
+    // 2. Buat Agen Spesialis (Sub-Agents)
+    const coderTools = getOsTools();
+    const coderAgent = createReactAgent({
       llm: this.llm,
-      tools,
-      checkpointSaver: this.checkpointer,
-      messageModifier: 'Anda adalah "macli", sebuah Enterprise Swarm Agent. Anda memiliki akses ke eksekutor bash native, file system, tool lokal, dan Claude MCP server. Jalankan tugas secara mandiri. Jangan ragu memanggil tool. Analisa error dan perbaiki.'
+      tools: coderTools,
+      messageModifier: 'Anda adalah CoderAgent. Anda ahli dalam menulis kode, membaca file, dan menjalankan bash.'
     });
 
-    console.log(pc.cyan('\n[SwarmDirector] LangGraph Network Aktif. Memulai eksekusi task...'));
+    const researcherTools = this.buildResearcherTools();
+    const researcherAgent = researcherTools.length > 0 ? createReactAgent({
+      llm: this.llm,
+      tools: researcherTools,
+      messageModifier: 'Anda adalah ResearcherAgent. Anda ahli dalam mencari informasi, menggunakan Claude MCP Tools, dan skill lokal.'
+    }) : null;
+
+    // Helper untuk menjalankan sub-agent dan mengembalikan state
+    const runAgent = async (agent: any, name: string, state: typeof AgentState.State) => {
+      const result = await agent.invoke(state);
+      const lastMessage = result.messages[result.messages.length - 1];
+      return {
+        messages: [new HumanMessage({ content: `${name} selesai dengan output: ${lastMessage.content}`, name })]
+      };
+    };
+
+    // 3. Buat Node Supervisor
+    const routingSchema = z.object({
+      next: z.enum(["CoderAgent", "ResearcherAgent", "FINISH"]).describe("Agen mana yang harus ditugaskan selanjutnya, atau FINISH jika tugas selesai.")
+    });
     
-    const config = { configurable: { thread_id: "macli-session-1" } };
-    const spinner = ora(`Swarm AI sedang menganalisa dan bekerja...`).start();
+    // Fallback jika tidak ada researcher tools
+    const availableOptions = researcherTools.length > 0 ? "CoderAgent, ResearcherAgent, atau FINISH" : "CoderAgent, atau FINISH";
+    const supervisorPrompt = `Anda adalah Supervisor. Tugas Anda adalah mengelola eksekusi tugas pengguna.
+Pecah tugas dan delegasikan ke pekerja berikut berdasarkan keahlian mereka:
+- CoderAgent: untuk operasi terminal, baca/tulis file, dan koding.
+${researcherTools.length > 0 ? '- ResearcherAgent: untuk memanggil API eksternal, Claude MCP, atau skill lokal.' : ''}
+Berdasarkan pesan sebelumnya, pilih pekerja selanjutnya atau FINISH jika tugas keseluruhan selesai. Options: ${availableOptions}`;
+
+    const supervisorChain = this.llm.withStructuredOutput(routingSchema);
+    
+    const supervisorNode = async (state: typeof AgentState.State) => {
+      const messages = [new SystemMessage(supervisorPrompt), ...state.messages];
+      const result = await supervisorChain.invoke(messages);
+      return { next: result.next };
+    };
+
+    // 4. Rakit Graph
+    const workflow: any = new StateGraph(AgentState)
+      .addNode("Supervisor", supervisorNode)
+      .addNode("CoderAgent", (state: any) => runAgent(coderAgent, "CoderAgent", state));
+
+    if (researcherTools.length > 0) {
+      workflow.addNode("ResearcherAgent", (state: any) => runAgent(researcherAgent, "ResearcherAgent", state));
+      workflow.addEdge("ResearcherAgent", "Supervisor");
+      workflow.addConditionalEdges("Supervisor", (state: any) => state.next, {
+        "CoderAgent": "CoderAgent",
+        "ResearcherAgent": "ResearcherAgent",
+        "FINISH": END,
+      });
+    } else {
+      workflow.addConditionalEdges("Supervisor", (state: any) => state.next, {
+        "CoderAgent": "CoderAgent",
+        "FINISH": END,
+      });
+    }
+
+    workflow.addEdge("CoderAgent", "Supervisor");
+    workflow.addEdge(START, "Supervisor");
+
+    const app = workflow.compile({ checkpointer: this.checkpointer });
+
+    console.log(pc.cyan('\n[SwarmDirector] Supervisor Multi-Agent Network Aktif...'));
+    const config = { configurable: { thread_id: "macli-session-multi-agent" } };
+    const spinner = ora(`Supervisor AI sedang mengatur strategi...`).start();
 
     try {
-      const stream = await agent.stream({
+      const stream = await app.stream({
         messages: [new HumanMessage(taskDescription)],
       }, config);
 
-      for await (const chunk of stream) {
-        if ("agent" in chunk) {
-            spinner.text = 'Swarm Agent (LLM) sedang berpikir...';
-        } else if ("tools" in chunk) {
-            spinner.text = 'Swarm Agent sedang menggunakan Tool...';
+      for await (const chunk of stream as any) {
+        if (chunk.Supervisor) {
+          spinner.text = `[Supervisor] mendelegasikan tugas ke -> ${chunk.Supervisor.next}`;
+        } else if (chunk.CoderAgent) {
+          spinner.text = `[CoderAgent] sedang bekerja di OS...`;
+        } else if (chunk.ResearcherAgent) {
+          spinner.text = `[ResearcherAgent] sedang bekerja dengan skill/MCP...`;
         }
       }
 
-      spinner.succeed(pc.green(pc.bold('\n✨ [SwarmDirector] Task selesai dieksekusi!')));
+      spinner.succeed(pc.green(pc.bold('\n✨ [SwarmDirector] Seluruh Tugas Selesai!')));
       
-      // Ambil hasil akhir dari state graph
-      const finalState = await agent.getState(config);
-      const messages = finalState.values.messages;
-      const lastMessage = messages[messages.length - 1];
+      const finalState = await app.getState(config);
+      const msgs = finalState.values.messages;
+      const lastMsg = msgs[msgs.length - 1];
       
       console.log(pc.white('============================================='));
-      console.log(lastMessage.content);
+      console.log(lastMsg.content);
       console.log(pc.white('=============================================\n'));
 
     } catch (error: any) {
