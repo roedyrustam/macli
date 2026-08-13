@@ -1,6 +1,6 @@
 # 🚀 Macli - Enterprise AI Agent Swarm Orchestrator
 
-[![NPM Version](https://img.shields.io/npm/v/macli.svg)](https://www.npmjs.com/package/macli)
+[![NPM Version](https://img.shields.io/npm/v/@roedyrustam/macli.svg)](https://www.npmjs.com/package/@roedyrustam/macli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Macli** adalah kerangka kerja (*framework*) berbasis CLI untuk mengorkestrasi ekosistem **Multi-Agent Swarm** yang sangat *powerful*. Dibangun dengan teknologi **LangGraph**, **Gemini 1.5 Pro**, dan mendukung **Claude Model Context Protocol (MCP)** secara *native*.
