@@ -9,6 +9,7 @@ const tools_1 = require("@langchain/core/tools");
 const messages_1 = require("@langchain/core/messages");
 const prebuilt_1 = require("@langchain/langgraph/prebuilt");
 const langgraph_1 = require("@langchain/langgraph");
+const zod_1 = require("zod");
 const osTools_1 = require("./tools/osTools");
 const ora_1 = __importDefault(require("ora"));
 const picocolors_1 = __importDefault(require("picocolors"));
@@ -57,12 +58,16 @@ class SwarmDirector {
                 }));
             }
             else {
-                aiTools.push(new tools_1.DynamicTool({
+                aiTools.push(new tools_1.DynamicStructuredTool({
                     name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
-                    description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
-                    func: async (input) => {
+                    description: skill.description || `Gunakan skill ini untuk: ${skill.name}. Panduan lengkap skill ini bisa diakses jika diperlukan.`,
+                    schema: zod_1.z.object({
+                        intent: zod_1.z.string().describe("Niat atau tujuan spesifik pemanggilan skill ini"),
+                        parameters: zod_1.z.record(zod_1.z.string(), zod_1.z.any()).optional().describe("Parameter terstruktur tambahan (JSON-like) jika diperlukan oleh skill"),
+                    }),
+                    func: async ({ intent, parameters }) => {
                         console.log(picocolors_1.default.blue(`\n[Agent -> Antigravity] Menjalankan skill lokal: ${skill.name}`));
-                        return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
+                        return `[HASIL SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi intent "${intent}" dengan parameter: ${JSON.stringify(parameters || {})}`;
                     },
                 }));
             }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
+import { writeFile } from 'fs/promises';
 import { loadSkills, loadClaudeMcpConfig } from './core/skillLoader';
 import { SwarmDirector } from './core/swarmDirector';
 import { McpClientManager } from './core/mcpClient';
@@ -9,6 +10,7 @@ import { Skill } from './types';
 import 'dotenv/config';
 import ora from 'ora';
 import pc from 'picocolors';
+import prompts from 'prompts';
 
 const program = new Command();
 
@@ -16,6 +18,34 @@ program
   .name('macli')
   .description('AI Agent Swarm Orchestrator for Gemini/Antigravity and Claude')
   .version('1.0.0');
+
+program
+  .command('init')
+  .description('Inisialisasi macli dan atur konfigurasi API Key')
+  .action(async () => {
+    console.log(pc.cyan(pc.bold('\n⚙️  Macli Initialization Setup\n')));
+    
+    const response = await prompts({
+      type: 'password',
+      name: 'apiKey',
+      message: 'Masukkan GOOGLE_API_KEY Anda (disembunyikan):',
+      validate: value => value.length > 0 ? true : 'API Key tidak boleh kosong!'
+    });
+
+    if (!response.apiKey) {
+      console.log(pc.red('Inisialisasi dibatalkan.'));
+      return;
+    }
+
+    const envPath = join(process.cwd(), '.env');
+    try {
+      await writeFile(envPath, `GOOGLE_API_KEY=${response.apiKey}\n`, 'utf-8');
+      console.log(pc.green(`\n✔ Berhasil! API Key disimpan di ${envPath}`));
+      console.log(pc.gray('Sekarang Anda bisa menjalankan: macli run "tugas Anda"'));
+    } catch (e: any) {
+      console.error(pc.red(`Gagal menulis file .env: ${e.message}`));
+    }
+  });
 
 program
   .command('run')
@@ -64,9 +94,9 @@ program
       }
 
       if (skills.length === 0) {
-        spinner.warn(pc.yellow('Tidak ada skill yang ditemukan. Melanjutkan dengan agen generik.'));
+        spinner.warn(pc.yellow('Tidak ada skill yang ditemukan. Melanjutkan dengan agen OS bawaan.'));
       } else {
-        spinner.succeed(pc.green(`Berhasil memuat ${skills.length} skill(s) ke dalam Swarm Arsenal (termasuk MCP).`));
+        spinner.succeed(pc.green(`Berhasil memuat ${skills.length} skill eksternal ke dalam Swarm Arsenal.`));
       }
       
       const director = new SwarmDirector(skills, mcpManager);

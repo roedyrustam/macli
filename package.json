@@ -29,6 +29,7 @@
   "description": "AI Agent Swarm Orchestrator CLI for Gemini and Claude",
   "devDependencies": {
     "@types/node": "^22.2.0",
+    "@types/prompts": "^2.4.9",
     "commander": "^12.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.17.0",
@@ -44,6 +45,7 @@
     "langchain": "^1.5.8",
     "ora": "^5.4.1",
     "picocolors": "^1.1.1",
+    "prompts": "^2.4.2",
     "zod": "^4.4.3"
   }
 }

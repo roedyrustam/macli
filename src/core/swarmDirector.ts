@@ -1,9 +1,10 @@
 import { Skill } from '../types';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { DynamicTool } from '@langchain/core/tools';
+import { DynamicTool, DynamicStructuredTool } from '@langchain/core/tools';
 import { HumanMessage } from '@langchain/core/messages';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver } from '@langchain/langgraph';
+import { z } from 'zod';
 import { McpClientManager } from './mcpClient';
 import { getOsTools } from './tools/osTools';
 import ora from 'ora';
@@ -51,12 +52,16 @@ export class SwarmDirector {
           },
         }));
       } else {
-        aiTools.push(new DynamicTool({
+        aiTools.push(new DynamicStructuredTool({
           name: skill.name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64) || 'default_tool',
-          description: skill.description || `Gunakan skill ini untuk: ${skill.name}`,
-          func: async (input: string) => {
+          description: skill.description || `Gunakan skill ini untuk: ${skill.name}. Panduan lengkap skill ini bisa diakses jika diperlukan.`,
+          schema: z.object({
+            intent: z.string().describe("Niat atau tujuan spesifik pemanggilan skill ini"),
+            parameters: z.record(z.string(), z.any()).optional().describe("Parameter terstruktur tambahan (JSON-like) jika diperlukan oleh skill"),
+          }),
+          func: async ({ intent, parameters }) => {
             console.log(pc.blue(`\n[Agent -> Antigravity] Menjalankan skill lokal: ${skill.name}`));
-            return `[HASIL DARI SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi dengan parameter: ${input}`;
+            return `[HASIL SKILL LOKAL ${skill.name.toUpperCase()}]: Berhasil mengeksekusi intent "${intent}" dengan parameter: ${JSON.stringify(parameters || {})}`;
           },
         }));
       }

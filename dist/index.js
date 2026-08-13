@@ -6,17 +6,44 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const commander_1 = require("commander");
 const path_1 = require("path");
+const promises_1 = require("fs/promises");
 const skillLoader_1 = require("./core/skillLoader");
 const swarmDirector_1 = require("./core/swarmDirector");
 const mcpClient_1 = require("./core/mcpClient");
 require("dotenv/config");
 const ora_1 = __importDefault(require("ora"));
 const picocolors_1 = __importDefault(require("picocolors"));
+const prompts_1 = __importDefault(require("prompts"));
 const program = new commander_1.Command();
 program
     .name('macli')
     .description('AI Agent Swarm Orchestrator for Gemini/Antigravity and Claude')
     .version('1.0.0');
+program
+    .command('init')
+    .description('Inisialisasi macli dan atur konfigurasi API Key')
+    .action(async () => {
+    console.log(picocolors_1.default.cyan(picocolors_1.default.bold('\n⚙️  Macli Initialization Setup\n')));
+    const response = await (0, prompts_1.default)({
+        type: 'password',
+        name: 'apiKey',
+        message: 'Masukkan GOOGLE_API_KEY Anda (disembunyikan):',
+        validate: value => value.length > 0 ? true : 'API Key tidak boleh kosong!'
+    });
+    if (!response.apiKey) {
+        console.log(picocolors_1.default.red('Inisialisasi dibatalkan.'));
+        return;
+    }
+    const envPath = (0, path_1.join)(process.cwd(), '.env');
+    try {
+        await (0, promises_1.writeFile)(envPath, `GOOGLE_API_KEY=${response.apiKey}\n`, 'utf-8');
+        console.log(picocolors_1.default.green(`\n✔ Berhasil! API Key disimpan di ${envPath}`));
+        console.log(picocolors_1.default.gray('Sekarang Anda bisa menjalankan: macli run "tugas Anda"'));
+    }
+    catch (e) {
+        console.error(picocolors_1.default.red(`Gagal menulis file .env: ${e.message}`));
+    }
+});
 program
     .command('run')
     .description('Run a task using the Swarm')
@@ -58,10 +85,10 @@ program
             }
         }
         if (skills.length === 0) {
-            spinner.warn(picocolors_1.default.yellow('Tidak ada skill yang ditemukan. Melanjutkan dengan agen generik.'));
+            spinner.warn(picocolors_1.default.yellow('Tidak ada skill yang ditemukan. Melanjutkan dengan agen OS bawaan.'));
         }
         else {
-            spinner.succeed(picocolors_1.default.green(`Berhasil memuat ${skills.length} skill(s) ke dalam Swarm Arsenal (termasuk MCP).`));
+            spinner.succeed(picocolors_1.default.green(`Berhasil memuat ${skills.length} skill eksternal ke dalam Swarm Arsenal.`));
         }
         const director = new swarmDirector_1.SwarmDirector(skills, mcpManager);
         await director.executeTask(task);
