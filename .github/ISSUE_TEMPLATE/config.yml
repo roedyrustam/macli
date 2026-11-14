@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability (Private Disclosure)
+    url: https://github.com/roedyrustam/macli/security/advisories/new
+    about: Please report security vulnerabilities privately rather than opening a public issue.
+  - name: Documentation & Architecture Blueprint
+    url: https://github.com/roedyrustam/macli/blob/main/BLUEPRINT.md
+    about: Read the core LangGraph & MCP architecture overview before filing an issue.

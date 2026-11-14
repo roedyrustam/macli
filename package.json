@@ -1,39 +1,62 @@
 {
   "name": "@roedyrustam/macli",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "Enterprise AI Agent Swarm Orchestrator CLI powered by LangGraph, MCP, and vibes-plug v4.8.0",
   "main": "dist/index.js",
   "bin": {
     "macli": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "BLUEPRINT.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && node --test dist/test/macli.test.js",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "ai",
-    "agent",
-    "swarm",
+    "ai-agents",
+    "multi-agent-systems",
+    "agent-swarm",
+    "swarm-orchestrator",
+    "langgraph",
     "langchain",
     "gemini",
+    "google-gemini",
     "claude",
-    "cli"
+    "mcp",
+    "model-context-protocol",
+    "antigravity",
+    "cli",
+    "autonomous-agents",
+    "coding-agent",
+    "llm-orchestration",
+    "typescript",
+    "nodejs"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/roedyrustam/macli.git"
   },
-  "author": "Antigravity User",
+  "homepage": "https://github.com/roedyrustam/macli#readme",
+  "bugs": {
+    "url": "https://github.com/roedyrustam/macli/issues"
+  },
+  "author": "Roedy Rustam (https://github.com/roedyrustam)",
   "license": "MIT",
-  "description": "AI Agent Swarm Orchestrator CLI for Gemini and Claude",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.2.0",
     "@types/prompts": "^2.4.9",
-    "commander": "^12.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.17.0",
     "typescript": "^5.5.4"
@@ -44,6 +67,7 @@
     "@langchain/google-genai": "^2.2.0",
     "@langchain/langgraph": "^1.4.9",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "commander": "^12.1.0",
     "dotenv": "^17.4.2",
     "langchain": "^1.5.8",
     "ora": "^5.4.1",

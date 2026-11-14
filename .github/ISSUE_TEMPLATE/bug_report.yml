@@ -1,0 +1,41 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in macli
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please fill in the details below so we can reproduce and resolve it quickly.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: Describe what went wrong...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Command and options used when the issue occurred.
+      placeholder: |
+        1. Run `macli run "..." --debug`
+        2. Observe error output...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error / Debug Output
+      description: Paste any relevant terminal output (mask your API keys!).
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version, OS, and macli version (`macli --version`).
+      placeholder: "e.g., Node v22.17.1, Windows 11 / Ubuntu 24.04, macli 1.0.0"
+    validations:
+      required: true
