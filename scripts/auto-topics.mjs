@@ -274,9 +274,16 @@ async function main() {
 
     if (!response.ok) {
       const errText = await response.text();
+      if (response.status === 403 && process.env.GITHUB_ACTIONS) {
+        console.warn(`\n⚠️ [GITHUB_ACTIONS_NOTE] GitHub API returned 403 (Resource not accessible by integration).`);
+        console.warn(`👉 The default GITHUB_TOKEN in GitHub Actions cannot modify repository topics due to GitHub security policy.`);
+        console.warn(`👉 To enable automated topics push directly from GitHub Actions, configure a repository secret named REPO_TOKEN with 'repo' scope.`);
+        console.warn(`✔ Local CLI synchronization (macli repo topics) and package.json keywords remain fully operational.\n`);
+        return;
+      }
       console.error(`❌ GitHub API Error (${response.status}): ${errText}`);
       if (response.status === 403) {
-        console.warn('👉 Note: If running inside GitHub Actions, ensure the workflow token has "repository administration" or "issues: write" permission, or use a personal access token (REPO_TOKEN).');
+        console.warn('👉 Note: Ensure the token has "repo" administration scope.');
       }
       process.exit(1);
     }
