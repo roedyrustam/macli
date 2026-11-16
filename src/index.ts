@@ -3,7 +3,11 @@
 import { Command } from 'commander';
 import 'dotenv/config';
 import { readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
+
+const execFileAsync = promisify(execFile);
 import ora from 'ora';
 import pc from 'picocolors';
 import prompts from 'prompts';
@@ -491,6 +495,48 @@ program
     writeOut(`  Specialist Subagents : ${report.nativeSubagentsCount}`);
     writeOut(`  Auto-Swarm Mode      : ${report.autoSwarmActive ? 'ENABLED' : 'DISABLED'}`);
     writeOut(`  LLM Providers        : Google=${report.llmKeysConfigured.google}, Anthropic=${report.llmKeysConfigured.anthropic}`);
+  });
+
+const repoCmd = program
+  .command('repo')
+  .description('Manage repository optimization and automated GitHub topics');
+
+repoCmd
+  .command('topics')
+  .description('Automatically extract, validate, and synchronize repository topics to GitHub')
+  .option('--dry-run', 'Calculate and display topics without modifying GitHub')
+  .option('--sync', 'Synchronize calculated topics directly to GitHub via API (default)')
+  .option('--json', 'Output topics as JSON')
+  .action(async (options) => {
+    const scriptPath = path.resolve(__dirname, '..', 'scripts', 'auto-topics.mjs');
+    const args = [scriptPath];
+    if (options.dryRun) {
+      args.push('--dry-run');
+    } else {
+      args.push('--sync');
+    }
+
+    try {
+      const { stdout, stderr } = await execFileAsync('node', args, {
+        cwd: path.resolve(__dirname, '..'),
+        env: { ...process.env },
+      });
+      if (options.json) {
+        const match = stdout.match(/\[\s*"[\s\S]*?"\s*\]/);
+        if (match) {
+          writeOut(match[0]);
+        } else {
+          writeOut(JSON.stringify({ output: stdout }));
+        }
+      } else {
+        if (stdout) writeOut(stdout);
+        if (stderr) writeErr(pc.yellow(stderr));
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      writeErr(pc.red(`Failed executing auto-topics: ${msg}`));
+      process.exit(1);
+    }
   });
 
 program.parse();

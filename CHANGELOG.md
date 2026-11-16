@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deep native integration with `vibes-plug` v4.8.0 via `src/core/vibesBridge.ts` (`178` skills, `1,199` code blueprints, `<350`-token micro-slices, and shared Blackboard state).
 - Support for `9` specialist subagents (`swarm-architect`, `fullstack-craftsman`, `quality-guardian`, `data-rag-architect`, `fintech-payment-sentinel`, `cloud-devops-sre`, `ai-mcp-engineer`, `mobile-spatial-craftsman`, `reverse-security-auditor`).
 - `3` swarm execution topologies (`fan_out_fan_in`, `pipeline_saga`, `critic_validator`) and Adaptive Model Cascade across Gemini and Anthropic profiles (`speed`, `balanced`, `deep`, `exhaustive`), plus `--deterministic` offline execution.
-- New CLI commands: `macli skill exec`, `macli skill chain`, `macli skill slice`, `macli skill guard`, `macli agents`, and `macli doctor`, along with `--json`, `--topology`, `--reasoning`, `--deterministic`, and `--with-vibes-mcp` flags.
+- New CLI commands: `macli skill exec`, `macli skill chain`, `macli skill slice`, `macli skill guard`, `macli agents`, `macli repo topics`, and `macli doctor`, along with `--json`, `--topology`, `--reasoning`, `--deterministic`, and `--with-vibes-mcp` flags.
+- Automated GitHub repository topics generation and synchronization engine (`scripts/auto-topics.mjs`, `npm run repo:topics`, `macli repo topics`, and `.github/workflows/auto-topics.yml`).
 - `366` deterministic AST/Regex guard rules automatically applied on `file_writer` writes and `macli skill guard`.
 - Integration test suite in `src/test/macli.test.ts` executed via `npm test`.
 - Open-source community health and repository standards (`LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, GitHub Issue/PR templates, Dependabot configuration, and `BLUEPRINT.md` v2.0.0).

@@ -220,5 +220,18 @@ describe('Macli v2.0.0 + Vibes-Plug v4.8.0 Integration Suite', () => {
     } finally {
       await rm(tmpDir, { recursive: true, force: true });
     }
+
+    const { stdout: repoOut } = await execFileAsync(process.execPath, [
+      CLI_ENTRY,
+      'repo',
+      'topics',
+      '--dry-run',
+      '--json',
+    ]);
+    const repoTopics = JSON.parse(repoOut);
+    assert.ok(Array.isArray(repoTopics));
+    assert.ok(repoTopics.includes('agent-swarm'));
+    assert.ok(repoTopics.includes('mcp'));
+    assert.equal(repoTopics.length, 20);
   });
 });

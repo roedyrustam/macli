@@ -1,0 +1,66 @@
+name: Auto Sync Repo Topics & Metadata
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'README.md'
+      - 'scripts/auto-topics.mjs'
+      - '.github/workflows/auto-topics.yml'
+  schedule:
+    - cron: '0 0 * * 1' # Every Monday at 00:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (validate without updating GitHub)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync-metadata:
+    name: Auto-generate & Sync Topics
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Auto Topics Generator
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            node scripts/auto-topics.mjs --dry-run
+          else
+            node scripts/auto-topics.mjs --sync
+          fi
+
+      - name: Commit & Push Updated package.json Keywords
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet package.json; then
+            git add package.json
+            git commit -m "chore(repo): auto-sync package.json keywords with github topics [skip ci]"
+            git push
+          else
+            echo "No package.json keyword changes to commit."
+          fi

@@ -113,6 +113,24 @@ macli agents
 macli doctor --json
 ```
 
+### Automated Repository & Topics Optimization
+
+Generate and synchronize optimal GitHub repository topics automatically based on your codebase, frameworks, and agent skills:
+
+```bash
+# Calculate and preview topics without making changes (Dry Run)
+macli repo topics --dry-run
+# or via npm script
+npm run repo:topics:dry
+
+# Synchronize calculated topics directly to GitHub via API
+macli repo topics
+# or via npm script
+npm run repo:topics
+```
+
+> **Automated GitHub Action**: Repository topics and `package.json` keywords are also automatically audited and synchronized via [`.github/workflows/auto-topics.yml`](./.github/workflows/auto-topics.yml) on push to `main` and on a weekly schedule.
+
 ---
 
 ## Architecture & Development
