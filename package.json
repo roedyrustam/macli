@@ -58,7 +58,7 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.2.0",
+    "@types/node": "^26.6.6",
     "@types/prompts": "^2.4.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.17.0",
